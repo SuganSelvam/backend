@@ -3,6 +3,8 @@ var app = require("express")();
 var http = require('http').createServer(app);
 var io = require('socket.io')(http);
 
+//For Hashing and Secured Password
+const bcrypt = require("bcrypt")
 
 //Cors : To enable CORS & Body Parer to Parse data which is sent from Client 
 const bodyParser = require("body-parser");
@@ -39,27 +41,63 @@ io.on('connection', (socket) => {
 //To Get Login Data From Client & Finds using the username and sends back to frontend
 app.post("/", async (req, res) => {
 
-  try {
+  console.log(req.body)
 
-    //Creating a client from MongoDB URL & connecting it to it's Collection
-    let client = await mongodb.connect(url);
-    let db = client.db("login");
+  if(req.body.SubmitType === "Login"){
 
-    //getting user Data by finding it in the collection
-    let dataUser = await db.collection("userLogin").find({ name: req.body.name }).toArray();
-    await client.close();
+    try {
 
-    //Sending User Data
-    res.send(dataUser);
+      //Creating a client from MongoDB URL & connecting it to it's Collection
+      let client = await mongodb.connect(url);
+      let db = client.db("login");
+  
+      //getting user Data by finding it in the collection
+      let dataUser = await db.collection("userLogin").find({ name: req.body.name }).toArray();
+      await client.close();
 
-    //Console Log for Test Purpose
-    console.log(dataUser);
-    console.log(req.body);
+      bcrypt.compare(req.body.password, dataUser[0].password, function(err, result) {
+          console.log("Result",result)          
+          //Sending User Data
+          res.send({result,dataUser}); 
+        });
 
-    //Error Handling
-  } catch (err) {
-    res.status(500).send('Something broke!')
+      //Console Log for Test Purpose
+      console.log("User Data :",dataUser);
+      console.log(req.body);
+  
+      //Error Handling
+    } catch (err) {
+      res.status(500).send('Something broke!')
+    }
+
+  }else{
+    console.log("User Registering")
+    try {
+
+      let salt = await bcrypt.genSalt(10)
+      let hash = await bcrypt.hash(req.body.password,salt)
+
+      req.body.password=hash
+
+      let client = await mongodb.connect(url);
+      let db = client.db("login");
+      let data = await db.collection("userLogin").insertOne({name : req.body.name, password: req.body.password});
+      await client.close();
+
+      res.json({
+        message: "Registered As User",
+      })
+
+      console.log(req.body)
+
+    } catch (error) {
+
+      console.log(err)
+
+    }
+
   }
+
 });
 
 
